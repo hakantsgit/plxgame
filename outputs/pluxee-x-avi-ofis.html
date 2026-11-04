@@ -369,7 +369,7 @@ const logo=new Image(); logo.src='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAA
 const keys=new Set(), found=new Set(), openDoors=new Set();
 let p, sprung=null, inspect=false, clock=0, last=0;
 function reset(message='Bir çıkış bul. Kapı önünde E tuşuna bas.'){
-  p={x:startDoor.x,y:startDoor.y,vy:0,ground:true,face:1,climb:false,climbFrame:0,duck:false}; sprung=null; status.textContent=message;
+  p={x:startDoor.x,y:startDoor.y,vy:0,ground:true,face:1,climb:false,climbFrame:0,duck:false,jumpRequested:false}; sprung=null; status.textContent=message;
 }
 const pointsPerLogo=100;
 const logosPerFloor=2;
@@ -491,6 +491,7 @@ function press(key){
  if(finished||inspect)return;
  if(movementKeys.has(key)&&deadline===null)deadline=performance.now()+roundDuration;
  if(key==='KeyE')useDoor();
+ if(key==='Space'&&p.ground)p.jumpRequested=true;
  keys.add(key);
 }
 window.addEventListener('keydown',e=>{if(!chosenHero||finished)return;if(e.target.tagName==='BUTTON'&&e.code==='Space')return;if(e.code.startsWith('Arrow')||e.code==='Space')e.preventDefault();if(!e.repeat)press(e.code);});
@@ -535,6 +536,8 @@ function update(){
  if(!ladder||dx)p.climb=false;
  p.duck=dy>0&&p.ground&&!p.climb;
  if(dx)p.face=dx;
+ const jumpRequested=p.jumpRequested||keys.has('Space');
+ p.jumpRequested=false;
  const oldY=p.y;
  const nextX=Math.max(17,Math.min(1183,p.x+dx*(p.duck?1.5:4.3)));
  if(!crates.some(([x,y,w])=>Math.abs(nextX-x)<w/2+8&&p.y>y-23&&p.y-24<y&&Math.abs(nextX-x)<Math.abs(p.x-x)))p.x=nextX;
@@ -548,7 +551,7 @@ function update(){
   if(p.y===top||p.y===bottom){p.climb=false;p.ground=true;}
  }
  else {
-  if(keys.has('Space')&&p.ground){p.vy=-11.4;keys.delete('Space');}
+  if(jumpRequested&&p.ground){p.vy=-11.4;keys.delete('Space');}
   p.vy=Math.min(11,p.vy+.49);p.y+=p.vy;p.ground=false;
   const floor=rows.flatMap(r=>r.spans.map(([a,b])=>[a,b,r.y])).concat(crates.map(([x,y,w])=>[x-w/2,x+w/2,y-24])).sort((a,b)=>a[2]-b[2]);
   for(const [a,b,y] of floor){
