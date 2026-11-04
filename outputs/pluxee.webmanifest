@@ -1,0 +1,9 @@
+{
+  "name": "Pluxee X Avı",
+  "short_name": "Pluxee X Avı",
+  "start_url": "./pluxee-x-avi-ofis.html",
+  "scope": "./",
+  "display": "fullscreen",
+  "background_color": "#10131d",
+  "theme_color": "#10131d"
+}

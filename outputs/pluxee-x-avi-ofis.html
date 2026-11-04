@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="tr"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><title>Pluxee Kahramanı · Pluxee Ofisi · Sinematik Sürüm</title>
+<html lang="tr"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"><link rel="manifest" href="pluxee.webmanifest"><title>Pluxee Kahramanı · Pluxee Ofisi · Sinematik Sürüm</title>
 <style>
 *{box-sizing:border-box}body{margin:0;background:#10131d;color:#f5e7ce;font:15px system-ui}main{max-width:1240px;margin:auto;padding:24px}header{display:flex;align-items:end;justify-content:space-between;gap:12px;margin-bottom:16px;flex-wrap:wrap}h1{font-size:clamp(25px,5vw,45px);margin:0}small{letter-spacing:.22em;color:#f4ae6b}canvas{display:block;width:100%;background:#191b2a;border:1px solid #58483d;border-radius:10px}button{background:#272b3c;color:inherit;border:1px solid #766650;border-radius:6px;padding:8px 14px;font:inherit;cursor:pointer;touch-action:none}p{color:#d2c3ad}nav{display:flex;gap:6px;flex-wrap:wrap}
 
@@ -62,6 +62,23 @@
  #hero-screen .hero-option canvas{height:40dvh}
  .result-card canvas{width:min(150px,32dvh)}
 }
+
+#fullscreen-help{position:absolute;top:52px;right:8px;max-width:min(290px,90%);z-index:2;padding:10px;margin:0;border-radius:8px;background:#101a28f5;font-size:13px}
+@media(pointer:coarse){
+ #game-view{touch-action:none}
+ #controls,.fullscreen-game #controls{position:absolute;inset:auto 7px 7px;z-index:1;display:flex;justify-content:space-between;align-items:end;width:auto;margin:0;pointer-events:none}
+ .direction-pad,.action-pad{display:grid;gap:4px}
+ .direction-pad{grid-template-columns:repeat(3,1fr);grid-template-areas:". up ." "left down right"}
+ .action-pad{grid-template-columns:repeat(2,1fr)}
+ #controls button{pointer-events:auto;width:clamp(44px,12vw,58px);min-height:44px;aspect-ratio:1;background:#17293694;border-color:#c1e9d083;color:#fff;border-radius:12px;font-size:22px}
+ #controls button.is-held{background:#23795acc}
+ #controls [data-key=ArrowUp]{grid-area:up}
+ #controls [data-key=ArrowDown]{grid-area:down}
+ #controls [data-key=ArrowLeft]{grid-area:left}
+ #controls [data-key=ArrowRight]{grid-area:right}
+ #controls .control-caption{display:none}
+}
+@media(pointer:fine){.direction-pad,.action-pad{display:contents}.fullscreen-game #controls{display:none}}
 </style>
 <main id="game" inert><header><div><small>PLUXEE KAHRAMANI / BÖLÜM 01</small><h1>Pluxee Ofisi</h1></div><nav><button id="map">Tasarım görünümü</button><button id="reset">Yeniden başlat</button></nav></header>
 <div id="game-board"><div id="game-view">
@@ -72,9 +89,23 @@
 <button id="fullscreen-toggle" type="button" aria-label="Tam ekran" title="Tam ekran" aria-pressed="false">
  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 4H4v5m11-5h5v5M4 15v5h5m11-5v5h-5"/></svg>
 </button>
-</div></div>
+<p id="fullscreen-help" role="status" hidden></p>
+</div>
+<nav id="controls" aria-label="Oyun kontrolleri">
+ <div class="direction-pad">
+  <button data-key="ArrowLeft" aria-label="Sol">◀<span class="control-caption"> Sol</span></button>
+  <button data-key="ArrowUp" aria-label="Tırman">↑<span class="control-caption"> Tırman</span></button>
+  <button data-key="ArrowDown" aria-label="İn veya eğil">↓<span class="control-caption"> İn / Eğil</span></button>
+  <button data-key="ArrowRight" aria-label="Sağ">▶<span class="control-caption"> Sağ</span></button>
+ </div>
+ <div class="action-pad">
+  <button data-key="Space" aria-label="Zıpla">⤒<span class="control-caption"> Zıpla</span></button>
+  <button data-key="KeyE" aria-label="Kapıyı aç">🚪<span class="control-caption"> Kapıyı aç</span></button>
+ </div>
+</nav>
+</div>
 <p id="status" aria-live="polite">Bir çıkış bul. Kapı önünde E tuşuna bas.</p>
-<nav id="controls"><button data-key="ArrowLeft">◀ Sol</button><button data-key="ArrowRight">Sağ ▶</button><button data-key="ArrowUp">↑ Tırman</button><button data-key="ArrowDown">↓ İn / Eğil</button><button data-key="Space">Zıpla</button><button data-key="KeyE">Kapıyı aç</button></nav>
+
 <p>Ok tuşları veya WASD ile hareket et. Space ile zıpla, E ile kapıları aç, R ile başa dön.</p></main>
 <section id="hero-screen" role="dialog" aria-modal="true" aria-label="Oyuncu ve kahraman seçimi">
   <div class="name-row"><input id="player-name" type="text" autocomplete="given-name" maxlength="32" aria-label="Adın" placeholder="Adını yaz"><button id="menu-mute" type="button" aria-label="Müziği sessize al" aria-pressed="false">🔊</button></div>
@@ -107,7 +138,7 @@
 <script>
 const canvas=document.querySelector('canvas'), ctx=canvas.getContext('2d');
 const fullscreenButton=document.querySelector('#fullscreen-toggle');
-let expandedInWindow=false;
+let expandedInWindow=false, fullscreenHelpTimer;
 function syncFullscreen(){
  const expanded=Boolean(document.fullscreenElement)||expandedInWindow;
  document.documentElement.classList.toggle('fullscreen-game',expanded);
@@ -126,7 +157,16 @@ fullscreenButton.onclick=async()=>{
   expandedInWindow=false;
  }else{
   try{await document.documentElement.requestFullscreen();}
-  catch{expandedInWindow=true;}
+  catch{
+   expandedInWindow=true;
+   if(mobileLayout.matches&&!navigator.standalone&&!matchMedia('(display-mode: fullscreen)').matches){
+    const help=document.querySelector('#fullscreen-help');
+    help.textContent='Safari çubuklarını gizlemek için Paylaş → Ana Ekrana Ekle → Web Uygulaması Olarak Aç.';
+    help.hidden=false;
+    clearTimeout(fullscreenHelpTimer);
+    fullscreenHelpTimer=setTimeout(()=>{help.hidden=true;},6500);
+   }
+  }
  }
  syncFullscreen();
  canvas.focus();
@@ -477,7 +517,7 @@ for(const button of document.querySelectorAll('[data-key]')){
 }
 document.querySelector('#reset').onclick=newRun;
 document.querySelector('#map').onclick=e=>{inspect=!inspect;e.target.textContent=inspect?'Oyun görünümü':'Tasarım görünümü';};
-const down=(a,b)=>keys.has(a)||keys.has(b);
+const down=(a,b)=>keys.has(a)||keys.has(b)||swipe?.key===a;
 function saw([x,y,range,speed,phase]){return [x+Math.sin(clock*speed+phase)*range,y];}
 function update(){
  if(!chosenHero||finished)return;
@@ -727,6 +767,23 @@ function draw(){
 }
 const mobileLayout=matchMedia('(pointer:coarse)');
 const gameView=document.querySelector('#game-view');
+let swipe=null;
+gameView.addEventListener('pointerdown',event=>{
+ if(!mobileLayout.matches||event.pointerType!=='touch'||swipe||finished||!chosenHero||event.target.closest('button'))return;
+ gameView.setPointerCapture(event.pointerId);
+ swipe={id:event.pointerId,x:event.clientX,y:event.clientY,key:null};
+});
+gameView.addEventListener('pointermove',event=>{
+ if(swipe?.id!==event.pointerId)return;
+ const x=event.clientX-swipe.x;
+ const y=event.clientY-swipe.y;
+ if(Math.max(Math.abs(x),Math.abs(y))<12){swipe.key=null;return;}
+ swipe.key=Math.abs(x)>=Math.abs(y)?(x<0?'ArrowLeft':'ArrowRight'):(y<0?'ArrowUp':'ArrowDown');
+ if(deadline===null&&!finished&&!inspect)deadline=performance.now()+roundDuration;
+});
+function releaseSwipe(event){if(swipe?.id===event.pointerId)swipe=null;}
+for(const event of ['pointerup','pointercancel','lostpointercapture'])gameView.addEventListener(event,releaseSwipe);
+window.addEventListener('blur',()=>{swipe=null;});
 const mobileTime=document.querySelector('#mobile-time');
 const mobileScore=document.querySelector('#mobile-score');
 const mobileLives=document.querySelector('#mobile-lives');
