@@ -132,7 +132,8 @@
    <button id="show-leaderboard" type="button" aria-controls="leaderboard" aria-expanded="false">Lider tablosu</button>
    <button id="result-mute" type="button" aria-label="Müziği sessize al" aria-pressed="false">🔊</button>
   </div>
-  <ol id="leaderboard" aria-label="Bu tarayıcıdaki en yüksek puanlar" hidden></ol>
+  <p id="leaderboard-status" role="status" hidden></p>
+  <ol id="leaderboard" aria-label="En yüksek puanlar" hidden></ol>
  </div>
 </section>
 <script>
@@ -384,17 +385,70 @@ try {
  const saved=JSON.parse(localStorage.getItem(leaderboardKey));
  if(Array.isArray(saved))leaderboardEntries=saved.filter(entry=>entry&&typeof entry.name==='string'&&Number.isFinite(entry.points));
 } catch {}
-leaderboardButton.onclick=()=>{
+const leaderboardStatus=document.querySelector('#leaderboard-status');
+const scoresUrl='https://jrxshiwfvqgsnvhyqxca.supabase.co/rest/v1/rpc/';
+const scoresKey='sb_publishable_EEZFuuTm7qO6jfJZtwHXOg_4TLsNw7d';
+const pendingKey='pluxee-x-avi-pending-runs';
+let pendingRuns=[];
+try{
+ const saved=JSON.parse(localStorage.getItem(pendingKey));
+ if(Array.isArray(saved))pendingRuns=saved;
+}catch{}
+async function scoreRequest(endpoint, data){
+ const response=await fetch(scoresUrl+endpoint,{
+  method:'POST',
+  headers:{apikey:scoresKey,'Content-Type':'application/json'},
+  body:JSON.stringify(data),
+  signal:AbortSignal.timeout(5000)
+ });
+ if(!response.ok)throw new Error('Skor servisi '+response.status);
+ return response;
+}
+function persistPending(){
+ try{localStorage.setItem(pendingKey,JSON.stringify(pendingRuns));}catch{}
+}
+let syncingRuns=null;
+function syncRuns(){
+ if(syncingRuns)return syncingRuns;
+ syncingRuns=(async()=>{
+  while(pendingRuns.length){
+   await scoreRequest('pluxee_submit_run',pendingRuns[0]);
+   pendingRuns.shift();
+   persistPending();
+  }
+ })().finally(()=>{syncingRuns=null;});
+ return syncingRuns;
+}
+function renderLeaderboard(entries){
+ leaderboard.replaceChildren(...entries.map(entry=>{
+  const item=document.createElement('li');
+  item.textContent=entry.name+' · '+entry.points+' puan';
+  return item;
+ }));
+}
+let leaderboardRequest=0;
+leaderboardButton.onclick=async()=>{
+ const request=++leaderboardRequest;
  leaderboard.hidden=!leaderboard.hidden;
+ leaderboardStatus.hidden=leaderboard.hidden;
  leaderboardButton.setAttribute('aria-expanded',String(!leaderboard.hidden));
- if(!leaderboard.hidden){
-  leaderboard.replaceChildren(...leaderboardEntries.map(entry=>{
-   const item=document.createElement('li');
-   item.textContent=entry.name+' · '+entry.points+' puan';
-   return item;
-  }));
+ if(leaderboard.hidden)return;
+ leaderboard.replaceChildren();
+ leaderboardStatus.textContent='Lider tablosu yükleniyor…';
+ try{
+  await syncRuns();
+  const response=await scoreRequest('pluxee_leaderboard',{});
+  const entries=await response.json();
+  if(request!==leaderboardRequest||leaderboard.hidden)return;
+  renderLeaderboard(entries);
+  leaderboardStatus.textContent=entries.length?'Tüm oyuncular':'Henüz skor kaydedilmedi.';
+ }catch{
+  if(request!==leaderboardRequest||leaderboard.hidden)return;
+  renderLeaderboard(leaderboardEntries);
+  leaderboardStatus.textContent='Ortak tabloya ulaşılamadı. Bu cihazdaki skorlar gösteriliyor.';
  }
 };
+if(pendingRuns.length)syncRuns().catch(()=>{});
 const roundDuration=60000;
 let deadline=null, lives=4, finished=false, doorScore=0;
 const movementKeys=new Set(['ArrowLeft','ArrowRight','ArrowUp','ArrowDown','KeyA','KeyD','KeyW','KeyS','Space']);
@@ -404,7 +458,8 @@ function remainingTime(){
 function finishRound(reason, cleared=false){
  if(finished)return;
  finished=true;
- const timeBonus=cleared?Math.floor(remainingTime()/1000)*15:0;
+ const secondsLeft=Math.floor(remainingTime()/1000);
+ const timeBonus=cleared?secondsLeft*15:0;
  const lifeBonus=lives*50;
  keys.clear();
  const total=score+doorScore+timeBonus+lifeBonus;
@@ -422,11 +477,23 @@ function finishRound(reason, cleared=false){
  document.querySelector('#time-points').textContent=timeBonus+' puan';
  document.querySelector('#life-points').textContent=lifeBonus+' puan';
  document.querySelector('#door-points').textContent=doorScore+' puan';
+ if(typeof globalThis.crypto?.randomUUID==='function'){
+  pendingRuns.push({
+   p_run_id:crypto.randomUUID(),p_player_name:playerName,p_hero:chosenHero,
+   p_logos:score/pointsPerLogo,p_correct_doors:found.size,
+   p_wrong_doors:(found.size*75-doorScore)/25,
+   p_seconds_left:secondsLeft,p_lives_left:lives,
+   p_finish_reason:cleared?'cleared':lives===0?'no_lives':'timeout'
+  });
+  persistPending();
+  syncRuns().catch(()=>{});
+ }
  leaderboardEntries.push({name:playerName||'Pluxee Kahramanı',points:total});
  leaderboardEntries.sort((a,b)=>b.points-a.points);
  leaderboardEntries=leaderboardEntries.slice(0,10);
  try {localStorage.setItem(leaderboardKey,JSON.stringify(leaderboardEntries));} catch {}
  leaderboard.hidden=true;
+ leaderboardStatus.hidden=true;
  leaderboardButton.setAttribute('aria-expanded','false');
  const portrait=document.querySelector('#result-hero').getContext('2d');
  const image=chosenHero==='female'?femaleSprite:sprite;
